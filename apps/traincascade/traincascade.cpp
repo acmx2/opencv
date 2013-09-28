@@ -5,8 +5,6 @@
 
 using namespace std;
 
-///test comment
-
 int main( int argc, char* argv[] )
 {
     CvCascadeClassifier classifier;
