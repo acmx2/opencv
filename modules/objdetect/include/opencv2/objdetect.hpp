@@ -110,9 +110,9 @@ public:
     double eps;
 };
 
-CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps = 0.2);
-CV_EXPORTS_W void groupRectangles(CV_IN_OUT std::vector<Rect>& rectList, CV_OUT std::vector<int>& weights, int groupThreshold, double eps = 0.2);
-CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<int>* weights, std::vector<double>* levelWeights );
+CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps = 0.2, std::vector<double>* pResWeights =0);
+CV_EXPORTS_W void groupRectangles(CV_IN_OUT std::vector<Rect>& rectList, CV_OUT std::vector<int>& weights, int groupThreshold, double eps = 0.2, std::vector<double>* pResWeights =0);
+CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<int>* weights, std::vector<double>* levelWeights, std::vector<double>* pResWeights =0 );
 CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& rejectLevels,
                                   std::vector<double>& levelWeights, int groupThreshold, double eps = 0.2);
 CV_EXPORTS   void groupRectangles_meanshift(std::vector<Rect>& rectList, std::vector<double>& foundWeights, std::vector<double>& foundScales,
@@ -164,7 +164,8 @@ public:
                                    double scaleFactor = 1.1,
                                    int minNeighbors = 3, int flags = 0,
                                    Size minSize = Size(),
-                                   Size maxSize = Size() );
+                                   Size maxSize = Size(),
+                                   std::vector<double>* pResultWeights =0);
 
     CV_WRAP virtual void detectMultiScale( const Mat& image,
                                    CV_OUT std::vector<Rect>& objects,
@@ -172,7 +173,8 @@ public:
                                    double scaleFactor=1.1,
                                    int minNeighbors=3, int flags=0,
                                    Size minSize=Size(),
-                                   Size maxSize=Size() );
+                                   Size maxSize=Size(),
+                                   std::vector<double>* pResultWeights =0);
 
     CV_WRAP virtual void detectMultiScale( const Mat& image,
                                    CV_OUT std::vector<Rect>& objects,
@@ -182,7 +184,8 @@ public:
                                    int minNeighbors = 3, int flags = 0,
                                    Size minSize = Size(),
                                    Size maxSize = Size(),
-                                   bool outputRejectLevels = false );
+                                   bool outputRejectLevels = false,
+                                   std::vector<double>* pResultWeights =0);
 
 
     bool isOldFormatCascade() const;
@@ -193,12 +196,14 @@ public:
 protected:
     virtual bool detectSingleScale( const Mat& image, int stripCount, Size processingRectSize,
                                     int stripSize, int yStep, double factor, std::vector<Rect>& candidates,
-                                    std::vector<int>& rejectLevels, std::vector<double>& levelWeights, bool outputRejectLevels = false );
+                                    std::vector<int>& rejectLevels, std::vector<double>& levelWeights, bool outputRejectLevels = false,
+                                    std::vector<double>* pResultWeights =0);
 
     virtual void detectMultiScaleNoGrouping( const Mat& image, std::vector<Rect>& candidates,
                                              std::vector<int>& rejectLevels, std::vector<double>& levelWeights,
                                              double scaleFactor, Size minObjectSize, Size maxObjectSize,
-                                             bool outputRejectLevels = false );
+                                             bool outputRejectLevels = false,
+                                             std::vector<double>* pResultWeights =0);
 
 protected:
     enum { BOOST = 0
@@ -215,16 +220,16 @@ protected:
     friend int predictOrdered( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight);
 
     template<class FEval>
-    friend int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight);
+    friend int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight, double* pSummaryWeight =0);
 
     template<class FEval>
     friend int predictOrderedStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight);
 
     template<class FEval>
-    friend int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight);
+    friend int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &featureEvaluator, double& weight, double* pSummaryWeight =0 );
 
     bool setImage( Ptr<FeatureEvaluator>& feval, const Mat& image);
-    virtual int runAt( Ptr<FeatureEvaluator>& feval, Point pt, double& weight );
+    virtual int runAt( Ptr<FeatureEvaluator>& feval, Point pt, double& weight, double* pSummaryWeight =0 );
 
     class Data
     {

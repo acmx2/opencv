@@ -361,7 +361,7 @@ inline int predictOrdered( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &_f
 }
 
 template<class FEval>
-inline int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &_featureEvaluator, double& sum )
+inline int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &_featureEvaluator, double& sum, double* pSummaryWeight )
 {
     int nstages = (int)cascade.data.stages.size();
     int nodeOfs = 0, leafOfs = 0;
@@ -372,6 +372,11 @@ inline int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator>
     CascadeClassifier::Data::DTreeNode* cascadeNodes = &cascade.data.nodes[0];
     CascadeClassifier::Data::DTree* cascadeWeaks = &cascade.data.classifiers[0];
     CascadeClassifier::Data::Stage* cascadeStages = &cascade.data.stages[0];
+
+    if (pSummaryWeight)
+    {
+        (*pSummaryWeight) =0;
+    }
 
     for(int si = 0; si < nstages; si++ )
     {
@@ -397,6 +402,11 @@ inline int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator>
         }
         if( sum < stage.threshold )
             return -si;
+
+        if (pSummaryWeight)
+        {
+            (*pSummaryWeight) +=(sum -stage.threshold);
+        }
     }
     return 1;
 }
@@ -432,7 +442,7 @@ inline int predictOrderedStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator
 }
 
 template<class FEval>
-inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &_featureEvaluator, double& sum )
+inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvaluator> &_featureEvaluator, double& sum, double* pSummaryWeight )
 {
     int nstages = (int)cascade.data.stages.size();
     int nodeOfs = 0, leafOfs = 0;
@@ -443,8 +453,15 @@ inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvalu
     CascadeClassifier::Data::DTreeNode* cascadeNodes = &cascade.data.nodes[0];
     CascadeClassifier::Data::Stage* cascadeStages = &cascade.data.stages[0];
 
+    if (pSummaryWeight)
+    {
+        (*pSummaryWeight) =0;
+    }
+
 #ifdef HAVE_TEGRA_OPTIMIZATION
     float tmp = 0; // float accumulator -- float operations are quicker
+    float tmpSumWeight = 0;
+    const bool bCalcSumWeight = (pSummaryWeight !=0);
 #endif
     for( int si = 0; si < nstages; si++ )
     {
@@ -474,14 +491,29 @@ inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvalu
             sum = (double)tmp;
             return -si;
         }
+
+        if (bCalcSumWeight)
+        {
+            tmpSumWeight +=(tmp -stage.threshold);
+        }
 #else
         if( sum < stage.threshold )
             return -si;
+
+        if (pSummaryWeight)
+        {
+            (*pSummaryWeight) +=(sum -stage.threshold);
+        }
 #endif
     }
 
 #ifdef HAVE_TEGRA_OPTIMIZATION
     sum = (double)tmp;
+
+    if (bCalcSumWeight)
+    {
+        (*pSummaryWeight) = (double)tmpSumWeight;
+    }
 #endif
 
     return 1;

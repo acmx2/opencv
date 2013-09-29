@@ -113,8 +113,14 @@ struct Logger
 namespace cv
 {
 
-void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<int>* weights, std::vector<double>* levelWeights)
+void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<int>* weights, std::vector<double>* levelWeights,
+                                                                                                                                                                                    std::vector<double>* pResWeights)
 {
+    if (pResWeights)
+    {
+        CV_Assert(pResWeights->size() ==rectList.size());
+    }
+
     if( groupThreshold <= 0 || rectList.empty() )
     {
         if( weights )
@@ -134,6 +140,7 @@ void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps
     std::vector<int> rweights(nclasses, 0);
     std::vector<int> rejectLevels(nclasses, 0);
     std::vector<double> rejectWeights(nclasses, DBL_MIN);
+    std::vector<double> totalClsWeights(nclasses, 0.0);
     int i, j, nlabels = (int)labels.size();
     for( i = 0; i < nlabels; i++ )
     {
@@ -158,6 +165,14 @@ void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps
                 rejectWeights[cls] = (*levelWeights)[i];
         }
     }
+    if (pResWeights)
+    {
+        for( i = 0; i < nlabels; i++ )
+        {
+            int cls = labels[i];
+            totalClsWeights[cls] +=(*pResWeights)[i];
+        }
+    }
 
     for( i = 0; i < nclasses; i++ )
     {
@@ -174,6 +189,8 @@ void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps
         weights->clear();
     if( levelWeights )
         levelWeights->clear();
+    if (pResWeights)
+        pResWeights->clear();
 
     for( i = 0; i < nclasses; i++ )
     {
@@ -181,6 +198,7 @@ void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps
         int n1 = rweights[i];
         double w1 = rejectWeights[i];
         int l1 = rejectLevels[i];
+        const double tw1 = totalClsWeights[i];
 
         // filter out rectangles which don't have enough similar rectangles
         if( n1 <= groupThreshold )
@@ -213,7 +231,14 @@ void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps
                 weights->push_back(l1);
             if( levelWeights )
                 levelWeights->push_back(w1);
+            if (pResWeights)
+                pResWeights->push_back(tw1);
         }
+    }
+
+    if (pResWeights)
+    {
+        CV_Assert(pResWeights->size() ==rectList.size());
     }
 }
 
@@ -408,14 +433,14 @@ static void groupRectangles_meanshift(std::vector<Rect>& rectList, double detect
     }
 }
 
-void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps)
+void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<double>* pResWeights)
 {
-    groupRectangles(rectList, groupThreshold, eps, 0, 0);
+    groupRectangles(rectList, groupThreshold, eps, 0, 0, pResWeights);
 }
 
-void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& weights, int groupThreshold, double eps)
+void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& weights, int groupThreshold, double eps, std::vector<double>* pResWeights)
 {
-    groupRectangles(rectList, groupThreshold, eps, &weights, 0);
+    groupRectangles(rectList, groupThreshold, eps, &weights, 0, pResWeights);
 }
 //used for cascade detection algorithm for ROC-curve calculating
 void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& rejectLevels, std::vector<double>& levelWeights, int groupThreshold, double eps)
@@ -871,13 +896,18 @@ bool CascadeClassifier::load(const String& filename)
     return !oldCascade.empty();
 }
 
-int CascadeClassifier::runAt( Ptr<FeatureEvaluator>& evaluator, Point pt, double& weight )
+int CascadeClassifier::runAt( Ptr<FeatureEvaluator>& evaluator, Point pt, double& weight, double* pSummaryWeight )
 {
     CV_Assert( !oldCascade );
 
     assert( data.featureType == FeatureEvaluator::HAAR ||
             data.featureType == FeatureEvaluator::LBP ||
             data.featureType == FeatureEvaluator::HOG );
+
+    if (pSummaryWeight)
+    {
+        (*pSummaryWeight) =0;
+    }
 
     if( !evaluator->setWindow(pt) )
         return -1;
@@ -886,7 +916,7 @@ int CascadeClassifier::runAt( Ptr<FeatureEvaluator>& evaluator, Point pt, double
         if( data.featureType == FeatureEvaluator::HAAR )
             return predictOrderedStump<HaarEvaluator>( *this, evaluator, weight );
         else if( data.featureType == FeatureEvaluator::LBP )
-            return predictCategoricalStump<LBPEvaluator>( *this, evaluator, weight );
+            return predictCategoricalStump<LBPEvaluator>( *this, evaluator, weight, pSummaryWeight );
         else if( data.featureType == FeatureEvaluator::HOG )
             return predictOrderedStump<HOGEvaluator>( *this, evaluator, weight );
         else
@@ -897,7 +927,7 @@ int CascadeClassifier::runAt( Ptr<FeatureEvaluator>& evaluator, Point pt, double
         if( data.featureType == FeatureEvaluator::HAAR )
             return predictOrdered<HaarEvaluator>( *this, evaluator, weight );
         else if( data.featureType == FeatureEvaluator::LBP )
-            return predictCategorical<LBPEvaluator>( *this, evaluator, weight );
+            return predictCategorical<LBPEvaluator>( *this, evaluator, weight, pSummaryWeight );
         else if( data.featureType == FeatureEvaluator::HOG )
             return predictOrdered<HOGEvaluator>( *this, evaluator, weight );
         else
@@ -932,7 +962,8 @@ class CascadeClassifierInvoker : public ParallelLoopBody
 {
 public:
     CascadeClassifierInvoker( CascadeClassifier& _cc, Size _sz1, int _stripSize, int _yStep, double _factor,
-        std::vector<Rect>& _vec, std::vector<int>& _levels, std::vector<double>& _weights, bool outputLevels, const Mat& _mask, Mutex* _mtx)
+        std::vector<Rect>& _vec, std::vector<int>& _levels, std::vector<double>& _weights, bool outputLevels, const Mat& _mask, Mutex* _mtx,
+        std::vector<double>* _pOutWeights =0)
     {
         classifier = &_cc;
         processingRectSize = _sz1;
@@ -944,6 +975,7 @@ public:
         levelWeights = outputLevels ? &_weights : 0;
         mask = _mask;
         mtx = _mtx;
+        pOutWeights = _pOutWeights;
     }
 
     void operator()(const Range& range) const
@@ -963,7 +995,8 @@ public:
                 }
 
                 double gypWeight;
-                int result = classifier->runAt(evaluator, Point(x, y), gypWeight);
+                double summaryWeight;
+                int result = classifier->runAt(evaluator, Point(x, y), gypWeight, &summaryWeight);
 
 #if defined (LOG_CASCADE_STATISTIC)
 
@@ -987,6 +1020,10 @@ public:
                     mtx->lock();
                     rectangles->push_back(Rect(cvRound(x*scalingFactor), cvRound(y*scalingFactor),
                                                winSize.width, winSize.height));
+                    if (pOutWeights)
+                    {
+                        pOutWeights->push_back(summaryWeight);
+                    }
                     mtx->unlock();
                 }
                 if( result == 0 )
@@ -1004,6 +1041,7 @@ public:
     std::vector<double> *levelWeights;
     Mat mask;
     Mutex* mtx;
+    std::vector<double>* pOutWeights;
 };
 
 struct getRect { Rect operator ()(const CvAvgComp& e) const { return e.rect; } };
@@ -1012,7 +1050,8 @@ struct getNeighbors { int operator ()(const CvAvgComp& e) const { return e.neigh
 
 bool CascadeClassifier::detectSingleScale( const Mat& image, int stripCount, Size processingRectSize,
                                            int stripSize, int yStep, double factor, std::vector<Rect>& candidates,
-                                           std::vector<int>& levels, std::vector<double>& weights, bool outputRejectLevels )
+                                           std::vector<int>& levels, std::vector<double>& weights, bool outputRejectLevels,
+                                           std::vector<double>* pResultWeights )
 {
     if( !featureEvaluator->setImage( image, data.origWinSize ) )
         return false;
@@ -1029,6 +1068,7 @@ bool CascadeClassifier::detectSingleScale( const Mat& image, int stripCount, Siz
     std::vector<Rect> candidatesVector;
     std::vector<int> rejectLevels;
     std::vector<double> levelWeights;
+    std::vector<double> candidateResWeights;
     Mutex mtx;
     if( outputRejectLevels )
     {
@@ -1040,7 +1080,13 @@ bool CascadeClassifier::detectSingleScale( const Mat& image, int stripCount, Siz
     else
     {
          parallel_for_(Range(0, stripCount), CascadeClassifierInvoker( *this, processingRectSize, stripSize, yStep, factor,
-            candidatesVector, rejectLevels, levelWeights, false, currentMask, &mtx));
+            candidatesVector, rejectLevels, levelWeights, false, currentMask, &mtx, &candidateResWeights));
+
+         CV_Assert(candidatesVector.size() ==candidateResWeights.size());
+         if (pResultWeights)
+         {
+             pResultWeights->insert(pResultWeights->end(),candidateResWeights.begin(),candidateResWeights.end());
+         }
     }
     candidates.insert( candidates.end(), candidatesVector.begin(), candidatesVector.end() );
 
@@ -1093,7 +1139,8 @@ static void detectMultiScaleOldFormat( const Mat& image, Ptr<CvHaarClassifierCas
 void CascadeClassifier::detectMultiScaleNoGrouping( const Mat& image, std::vector<Rect>& candidates,
                                                     std::vector<int>& rejectLevels, std::vector<double>& levelWeights,
                                                     double scaleFactor, Size minObjectSize, Size maxObjectSize,
-                                                    bool outputRejectLevels )
+                                                    bool outputRejectLevels,
+                                                    std::vector<double>* pResultWeights )
 {
     candidates.clear();
 
@@ -1149,7 +1196,7 @@ void CascadeClassifier::detectMultiScaleNoGrouping( const Mat& image, std::vecto
         stripSize = (((processingRectSize.height + stripCount - 1)/stripCount + yStep-1)/yStep)*yStep;
 
         if( !detectSingleScale( scaledImage, stripCount, processingRectSize, stripSize, yStep, factor, candidates,
-            rejectLevels, levelWeights, outputRejectLevels ) )
+            rejectLevels, levelWeights, outputRejectLevels, pResultWeights ) )
             break;
     }
 }
@@ -1159,7 +1206,8 @@ void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& o
                                           std::vector<double>& levelWeights,
                                           double scaleFactor, int minNeighbors,
                                           int flags, Size minObjectSize, Size maxObjectSize,
-                                          bool outputRejectLevels )
+                                          bool outputRejectLevels,
+                                          std::vector<double>* pResultWeights)
 {
     CV_Assert( scaleFactor > 1 && image.depth() == CV_8U );
 
@@ -1175,7 +1223,7 @@ void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& o
     else
     {
         detectMultiScaleNoGrouping( image, objects, rejectLevels, levelWeights, scaleFactor, minObjectSize, maxObjectSize,
-                                    outputRejectLevels );
+                                    outputRejectLevels, pResultWeights );
         const double GROUP_EPS = 0.2;
         if( outputRejectLevels )
         {
@@ -1183,25 +1231,27 @@ void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& o
         }
         else
         {
-            groupRectangles( objects, minNeighbors, GROUP_EPS );
+            groupRectangles( objects, minNeighbors, GROUP_EPS, pResultWeights );
         }
     }
 }
 
 void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& objects,
                                           double scaleFactor, int minNeighbors,
-                                          int flags, Size minObjectSize, Size maxObjectSize)
+                                          int flags, Size minObjectSize, Size maxObjectSize,
+                                          std::vector<double>* pResultWeights)
 {
     std::vector<int> fakeLevels;
     std::vector<double> fakeWeights;
     detectMultiScale( image, objects, fakeLevels, fakeWeights, scaleFactor,
-        minNeighbors, flags, minObjectSize, maxObjectSize );
+        minNeighbors, flags, minObjectSize, maxObjectSize, false, pResultWeights );
 }
 
 void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& objects,
                                           std::vector<int>& numDetections, double scaleFactor,
                                           int minNeighbors, int flags, Size minObjectSize,
-                                          Size maxObjectSize )
+                                          Size maxObjectSize,
+                                          std::vector<double>* pResultWeights)
 {
     CV_Assert( scaleFactor > 1 && image.depth() == CV_8U );
 
@@ -1220,9 +1270,10 @@ void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& o
     }
     else
     {
-        detectMultiScaleNoGrouping( image, objects, fakeLevels, fakeWeights, scaleFactor, minObjectSize, maxObjectSize );
+        detectMultiScaleNoGrouping( image, objects, fakeLevels, fakeWeights, scaleFactor, minObjectSize, maxObjectSize,
+                                    false, pResultWeights );
         const double GROUP_EPS = 0.2;
-        groupRectangles( objects, numDetections, minNeighbors, GROUP_EPS );
+        groupRectangles( objects, numDetections, minNeighbors, GROUP_EPS, pResultWeights );
     }
 }
 
