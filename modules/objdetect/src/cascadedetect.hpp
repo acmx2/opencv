@@ -405,7 +405,7 @@ inline int predictCategorical( CascadeClassifier& cascade, Ptr<FeatureEvaluator>
 
         if (pSummaryWeight)
         {
-            (*pSummaryWeight) +=std::sqrt(sum -stage.threshold);
+            (*pSummaryWeight) +=std::log(1.0f +sum -stage.threshold);
         }
     }
     return 1;
@@ -494,7 +494,7 @@ inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvalu
 
         if (bCalcSumWeight)
         {
-            tmpSumWeight +=std::sqrt(tmp -stage.threshold);
+            tmpSumWeight +=std::log(1.0f +tmp -stage.threshold);
         }
 #else
         if( sum < stage.threshold )
@@ -502,7 +502,7 @@ inline int predictCategoricalStump( CascadeClassifier& cascade, Ptr<FeatureEvalu
 
         if (pSummaryWeight)
         {
-            (*pSummaryWeight) +=std::sqrt(sum -stage.threshold);
+            (*pSummaryWeight) +=std::log(1.0 +sum -stage.threshold);
         }
 #endif
     }

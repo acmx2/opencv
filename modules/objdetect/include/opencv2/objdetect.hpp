@@ -114,7 +114,7 @@ CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshol
 CV_EXPORTS_W void groupRectangles(CV_IN_OUT std::vector<Rect>& rectList, CV_OUT std::vector<int>& weights, int groupThreshold, double eps = 0.2, std::vector<double>* pResWeights =0);
 CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, int groupThreshold, double eps, std::vector<int>* weights, std::vector<double>* levelWeights, std::vector<double>* pResWeights =0 );
 CV_EXPORTS   void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& rejectLevels,
-                                  std::vector<double>& levelWeights, int groupThreshold, double eps = 0.2);
+                                  std::vector<double>& levelWeights, int groupThreshold, double eps = 0.2, std::vector<double>* pResWeights =0);
 CV_EXPORTS   void groupRectangles_meanshift(std::vector<Rect>& rectList, std::vector<double>& foundWeights, std::vector<double>& foundScales,
                                           double detectThreshold = 0.0, Size winDetSize = Size(64, 128));
 

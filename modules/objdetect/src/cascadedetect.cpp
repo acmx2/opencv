@@ -443,9 +443,9 @@ void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& weights, int
     groupRectangles(rectList, groupThreshold, eps, &weights, 0, pResWeights);
 }
 //used for cascade detection algorithm for ROC-curve calculating
-void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& rejectLevels, std::vector<double>& levelWeights, int groupThreshold, double eps)
+void groupRectangles(std::vector<Rect>& rectList, std::vector<int>& rejectLevels, std::vector<double>& levelWeights, int groupThreshold, double eps, std::vector<double>* pResWeights)
 {
-    groupRectangles(rectList, groupThreshold, eps, &rejectLevels, &levelWeights);
+    groupRectangles(rectList, groupThreshold, eps, &rejectLevels, &levelWeights, pResWeights);
 }
 //can be used for HOG detection algorithm only
 void groupRectangles_meanshift(std::vector<Rect>& rectList, std::vector<double>& foundWeights,
@@ -1012,6 +1012,10 @@ public:
                         rectangles->push_back(Rect(cvRound(x*scalingFactor), cvRound(y*scalingFactor), winSize.width, winSize.height));
                         rejectLevels->push_back(-result);
                         levelWeights->push_back(gypWeight);
+                        if (pOutWeights)
+                        {
+                            pOutWeights->push_back(summaryWeight);
+                        }
                         mtx->unlock();
                     }
                 }
@@ -1073,7 +1077,7 @@ bool CascadeClassifier::detectSingleScale( const Mat& image, int stripCount, Siz
     if( outputRejectLevels )
     {
         parallel_for_(Range(0, stripCount), CascadeClassifierInvoker( *this, processingRectSize, stripSize, yStep, factor,
-            candidatesVector, rejectLevels, levelWeights, true, currentMask, &mtx));
+            candidatesVector, rejectLevels, levelWeights, true, currentMask, &mtx, &candidateResWeights));
         levels.insert( levels.end(), rejectLevels.begin(), rejectLevels.end() );
         weights.insert( weights.end(), levelWeights.begin(), levelWeights.end() );
     }
@@ -1081,14 +1085,13 @@ bool CascadeClassifier::detectSingleScale( const Mat& image, int stripCount, Siz
     {
          parallel_for_(Range(0, stripCount), CascadeClassifierInvoker( *this, processingRectSize, stripSize, yStep, factor,
             candidatesVector, rejectLevels, levelWeights, false, currentMask, &mtx, &candidateResWeights));
-
-         CV_Assert(candidatesVector.size() ==candidateResWeights.size());
-         if (pResultWeights)
-         {
-             pResultWeights->insert(pResultWeights->end(),candidateResWeights.begin(),candidateResWeights.end());
-         }
     }
     candidates.insert( candidates.end(), candidatesVector.begin(), candidatesVector.end() );
+    CV_Assert(candidatesVector.size() ==candidateResWeights.size());
+    if (pResultWeights)
+    {
+        pResultWeights->insert(pResultWeights->end(),candidateResWeights.begin(),candidateResWeights.end());
+    }
 
 #if defined (LOG_CASCADE_STATISTIC)
     logger.write();
@@ -1227,7 +1230,7 @@ void CascadeClassifier::detectMultiScale( const Mat& image, std::vector<Rect>& o
         const double GROUP_EPS = 0.2;
         if( outputRejectLevels )
         {
-            groupRectangles( objects, rejectLevels, levelWeights, minNeighbors, GROUP_EPS );
+            groupRectangles( objects, rejectLevels, levelWeights, minNeighbors, GROUP_EPS, pResultWeights );
         }
         else
         {
